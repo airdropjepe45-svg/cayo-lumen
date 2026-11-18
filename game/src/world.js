@@ -4,7 +4,7 @@
 // gameplay modules use to stay on the roads and out of the walls.
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { chance, pick, rand } from './random.js';
+import { chance, pick, rand, shuffle } from './random.js';
 
 const C = CONFIG.colors;
 const ROADS = CONFIG.roadCoords;
@@ -307,9 +307,12 @@ export function buildWorld(scene, rng) {
   box(6, 4, 5, new THREE.MeshLambertMaterial({ color: 0x8a5a3a }), 0, 3.2, 24, pier);
   const pierSign = new THREE.Mesh(
     new THREE.PlaneGeometry(10, 2.5),
-    new THREE.MeshBasicMaterial({ map: makeTextTexture('PIER 9', '#37e0d8', '#101018', 56) }),
+    new THREE.MeshBasicMaterial({ map: makeTextTexture('PIER 9', '#37e0d8', '#101018', 56), side: THREE.DoubleSide }),
   );
   pierSign.position.set(0, 6.4, 24);
+  // Face the sign north, toward the player walking out onto the pier:
+  // seen from the back it would read mirrored, so turn its front around.
+  pierSign.rotation.y = Math.PI;
   pier.add(pierSign);
 
   // ---- beach umbrellas ----

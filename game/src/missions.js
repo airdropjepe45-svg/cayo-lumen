@@ -610,10 +610,13 @@ export class MissionManager {
     const target = this.currentTarget();
     if (!target) return;
     const dist = Math.round(dist2D(pos.x, pos.z, target.x, target.z));
-    // Bearing relative to the camera yaw: 0 means straight ahead.
+    // Bearing relative to the camera yaw: 0 means straight ahead. The
+    // HUD rotates the arrow with CSS rotate(), which turns clockwise, so
+    // the sign is yaw - angleTo: a target to the player's right (east
+    // while facing north) must rotate the arrow clockwise, not counter-.
     const yaw = (this.G.player && this.G.player.yaw) || 0;
     const angleTo = Math.atan2(target.x - pos.x, target.z - pos.z);
-    const bearing = angleTo - yaw;
+    const bearing = yaw - angleTo;
     this.G.hud.setObjective(this.currentObjectiveText(), dist, bearing);
   }
 

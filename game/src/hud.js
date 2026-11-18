@@ -411,20 +411,23 @@ export class HUD {
       }
     }
     // Police (flashing blue/red).
-    const cops = (this.G.police && (this.G.police.cops || this.G.police.cars)) || [];
+    const cops = (this.G.police && this.G.police.copCars) || [];
     const copColor = Math.floor((this.G.time || 0) * 4) % 2 === 0 ? '#4d8dff' : '#ff4d4d';
     for (const cop of cops) {
       const p = cop.pos || (cop.group && cop.group.position) || cop;
       if (p && typeof p.x === 'number') dot(p.x, p.z, 3, copColor);
     }
-    // Player arrow, rotated by yaw. North is up; yaw 0 faces north (-z).
+    // Player arrow, rotated by yaw. North is up; the arrow is drawn
+    // pointing north, and the player faces (sin yaw, cos yaw), so the
+    // rotation that maps north onto the facing is PI - yaw (not -yaw:
+    // yaw PI faces north, and rotate(-PI) would point the arrow south).
     const playerPos = this._playerPos();
     const yaw = (this.G.player && this.G.player.yaw) || 0;
     if (playerPos) {
       const [px, py] = toMap(playerPos.x, playerPos.z);
       ctx.save();
       ctx.translate(px, py);
-      ctx.rotate(-yaw);
+      ctx.rotate(Math.PI - yaw);
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(-5, 5); ctx.closePath();

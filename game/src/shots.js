@@ -101,11 +101,12 @@ function stageChase(G) {
   if (G.hud && typeof G.hud.hideMenus === 'function') G.hud.hideMenus();
   // Player in a coral sport coupe, heading north up the avenue at speed.
   posePlayerInCar(G, 'sport', 0xd81b60, 0, 30, Math.PI, 30);
-  // Three cop cruisers tight behind, staggered across the lanes.
+  // Three cop cruisers tight on the player's flanks, all ahead of the
+  // chase camera so the shot shows the pursuit, not empty road.
   const copOffsets = [
-    { x: -3.5, z: 46 },
-    { x: 3.5, z: 58 },
-    { x: 0, z: 74 },
+    { x: -5, z: 30 },
+    { x: 5, z: 34 },
+    { x: -2, z: 38 },
   ];
   for (const o of copOffsets) {
     const cop = createCarMesh('sedan', 0x22304a);
@@ -113,9 +114,9 @@ function stageChase(G) {
     cop.rotation.y = Math.PI;
     G.scene.add(cop);
   }
-  // Helicopter circling low over the chase.
+  // Helicopter ahead of the chase, low over the avenue and in frame.
   const heli = makeHeli();
-  heli.position.set(14, 26, 8);
+  heli.position.set(5, 15, 6);
   heli.rotation.y = 0.6;
   G.scene.add(heli);
   G.wanted = 3;
@@ -189,6 +190,40 @@ function stageNight(G) {
 const STAGES = { start: stageStart, chase: stageChase, mission: stageMission, night: stageNight };
 
 /**
+ * Snap the chase camera onto the staged pose at once. The per-frame camera
+ * lerps from the menu orbit, so at a low frame rate it would still be
+ * travelling when the screenshot lands and the shot would show the city,
+ * not the staged scene. This mirrors main.js's followCamera exactly
+ * (yaw = camYaw + PI), so the next frames keep it there. Each shot gets
+ * its own distance/pitch: the chase sits further back and higher so the
+ * pursuit fits in frame, the mission sits close on the player.
+ */
+const SHOT_CAMERA = {
+  chase: { dist: 15, pitch: 0.38 },
+  mission: { dist: 6.5, pitch: 0.2 },
+  night: { dist: 13, pitch: 0.34 },
+};
+
+function snapCamera(G) {
+  if (!G.camera || !G.player || G.state !== 'playing') return;
+  const yaw = (G.player.camYaw ?? Math.PI) + Math.PI;
+  const pose = SHOT_CAMERA[G.shotMode] || {};
+  const pitch = pose.pitch ?? G.player.camPitch ?? 0.28;
+  const inCar = G.player.inCar && G.playerCar && G.playerCar.group;
+  const dist = pose.dist ?? (inCar ? 11.5 : 8.5);
+  const focus = inCar ? G.playerCar.group.position : G.player.pos;
+  const cx = focus.x - Math.sin(yaw) * Math.cos(pitch) * dist;
+  const cy = focus.y + Math.sin(pitch) * dist + 1.6;
+  const cz = focus.z - Math.cos(yaw) * Math.cos(pitch) * dist;
+  G.camera.position.set(cx, Math.max(0.6, cy), cz);
+  G.camera.lookAt(
+    focus.x + Math.sin(yaw) * 2.2,
+    focus.y + 1.4,
+    focus.z + Math.cos(yaw) * 2.2,
+  );
+}
+
+/**
  * Stage the named shot on the already-booted game G. Returns the shot name
  * (or null when there is none). Sets window.__shotReady after the settle.
  */
@@ -199,6 +234,7 @@ export function applyShot(G) {
   G.shotMode = shot;
   window.__shotReady = false;
   STAGES[shot](G);
+  snapCamera(G);
   window.setTimeout(() => {
     window.__shotReady = true;
   }, SETTLE_MS);
