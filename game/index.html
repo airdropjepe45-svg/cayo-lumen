@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAYO LUMEN — an open-world crime story</title>
+<style>
+  :root {
+    --amber: #ffb13d;
+    --coral: #ff5a76;
+    --cyan: #37e0d8;
+    --gold: #ffd23d;
+    --ink: #14101c;
+    --panel: rgba(16, 12, 26, 0.72);
+    --panel-line: rgba(255, 179, 61, 0.35);
+    --text: #fff3e0;
+    --muted: #d8c4a8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #241536; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  /* ---------- HUD (pointer-transparent except panels) ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #hud.hidden { display: none; }
+  .hud-box {
+    position: absolute; background: var(--panel); border: 1px solid var(--panel-line);
+    border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(3px);
+    text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  }
+  #wanted { top: 14px; left: 14px; font-size: 26px; letter-spacing: 4px; color: var(--gold); min-width: 170px; }
+  #wanted.hot { color: #ff5a5a; }
+  #health { top: 76px; left: 14px; width: 190px; padding: 8px 12px; }
+  #health .label { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 5px; }
+  /* The track holds the bar; HUD sets #health-bar's width % and colour. */
+  .health-track { height: 10px; background: rgba(255,255,255,.15); border-radius: 5px; overflow: hidden; }
+  #health-bar { height: 100%; width: 100%; background: #7ddc7d; border-radius: 5px; transition: width .2s; }
+  #stats { top: 14px; right: 14px; text-align: right; min-width: 190px; }
+  #money { font-size: 26px; font-weight: 800; color: #7dff9a; }
+  #clock { font-size: 15px; color: var(--text); margin-top: 2px; }
+  #radio { font-size: 12px; letter-spacing: 1px; color: var(--cyan); margin-top: 2px; }
+  #minimap-wrap { position: absolute; left: 14px; bottom: 14px; border: 2px solid var(--panel-line); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
+  #minimap { display: block; width: 180px; height: 180px; background: #1c2a3a; }
+  #objective {
+    left: 50%; bottom: 18px; transform: translateX(-50%); max-width: 46vw;
+    font-size: 15px; font-weight: 600; text-align: center; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  #objective .obj-label { color: var(--gold); letter-spacing: 2px; font-size: 11px; display: block; }
+  #speed { right: 14px; bottom: 14px; font-size: 30px; font-weight: 800; text-align: right; }
+  #speed .unit { font-size: 12px; color: var(--muted); font-weight: 400; display: block; }
+  #crosshair {
+    position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+    transform: translate(-50%, -50%);
+  }
+  #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+  #crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+  #crosshair.on { display: block; }
+  #dialog {
+    position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
+    width: min(620px, 86vw);
+  }
+  #dialog.hidden { display: none; }
+  #dialog-speaker { color: var(--amber); font-weight: 800; letter-spacing: 1px; font-size: 13px; }
+  #dialog-text { font-size: 16px; line-height: 1.45; margin-top: 3px; }
+  /* HUD writes one message straight into #toast and toggles .show on it. */
+  #toast {
+    position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 8px;
+    padding: 7px 16px; font-size: 14px; white-space: nowrap; opacity: 0;
+    transition: opacity .25s; max-width: 88vw; overflow: hidden; text-overflow: ellipsis;
+  }
+  #toast.show { opacity: 1; }
+  #toast.big { font-size: 17px; font-weight: 700; color: var(--gold); }
+  /* The message feed: HUD keeps the last 3 flash lines here. */
+  #feed { position: absolute; left: 14px; top: 148px; font-size: 13px; max-width: 320px; }
+  #feed p {
+    margin: 3px 0; padding: 4px 10px; background: var(--panel);
+    border: 1px solid rgba(255,255,255,.08); border-radius: 6px;
+  }
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 4; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 30, 30, .55) 100%);
+    transition: opacity .15s;
+  }
+
+  /* ---------- overlays / menus ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(36,21,54,.55) 0%, rgba(20,10,30,.82) 100%);
+  }
+  .overlay.hidden { display: none; }
+  .panel {
+    width: min(640px, 92vw); max-height: 92vh; overflow: auto; text-align: center;
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 16px;
+    padding: 30px 34px 26px; box-shadow: 0 12px 50px rgba(0,0,0,.6);
+  }
+  .game-title {
+    font-size: 58px; font-weight: 900; letter-spacing: 6px; margin: 0; line-height: 1;
+    background: linear-gradient(180deg, #ffe9a8 10%, #ffb13d 45%, #ff5a76 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 4px 24px rgba(255, 90, 118, .35);
+  }
+  .game-sub { color: var(--muted); letter-spacing: 3px; font-size: 13px; margin: 8px 0 4px; text-transform: uppercase; }
+  .story { font-size: 15px; line-height: 1.55; color: var(--text); margin: 14px 0 20px; }
+  .menu-btn {
+    display: block; width: 100%; margin: 8px 0; padding: 13px; font-size: 17px; font-weight: 700;
+    font-family: inherit; color: var(--ink); background: linear-gradient(180deg, #ffd23d, #ffb13d);
+    border: none; border-radius: 10px; cursor: pointer; letter-spacing: .5px;
+  }
+  .menu-btn:hover { filter: brightness(1.1); }
+  .menu-btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--panel-line); font-weight: 600; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; text-align: left; font-size: 13px; color: var(--muted); margin: 18px 0 6px; }
+  .controls b { color: var(--text); }
+  .credits { font-size: 12px; color: var(--muted); margin-top: 14px; }
+  #gameover-title { font-size: 52px; font-weight: 900; letter-spacing: 4px; margin: 0; color: var(--coral); }
+  #gameover-text { font-size: 15px; color: var(--text); margin: 12px 0 18px; line-height: 1.5; }
+  .panel h2 { margin: 0 0 12px; letter-spacing: 3px; font-size: 22px; color: var(--amber); }
+
+  /* ---------- side panels (garage / phone) ---------- */
+  .side-panel {
+    position: fixed; z-index: 11; top: 50%; right: 18px; transform: translateY(-50%);
+    width: 320px; background: var(--panel); border: 1px solid var(--panel-line);
+    border-radius: 14px; padding: 18px; box-shadow: 0 12px 40px rgba(0,0,0,.6);
+  }
+  .side-panel.hidden { display: none; }
+  /* Economy / Missions show their panel by adding .open (they never remove
+     .hidden), so an open panel must win over the hidden rule. */
+  .side-panel.hidden.open { display: block; }
+  .side-panel h2 { margin: 0 0 4px; font-size: 19px; letter-spacing: 2px; color: var(--amber); }
+  .side-panel .sub { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .side-panel .row {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 10px 4px; border-top: 1px solid rgba(255,255,255,.08); font-size: 14px;
+  }
+  .side-panel .row .price { color: #7dff9a; font-weight: 700; white-space: nowrap; }
+  .side-panel .row button {
+    font-family: inherit; font-size: 13px; font-weight: 700; padding: 6px 12px;
+    background: var(--amber); color: var(--ink); border: none; border-radius: 7px; cursor: pointer;
+  }
+  .side-panel .close {
+    margin-top: 12px; width: 100%; padding: 9px; font-family: inherit; font-size: 14px;
+    background: transparent; color: var(--text); border: 1px solid var(--panel-line);
+    border-radius: 8px; cursor: pointer;
+  }
+  #mission-phone { right: auto; left: 18px; }
+  #mission-phone .row.done { color: #7dff9a; }
+  #mission-phone .row.current { color: var(--gold); font-weight: 700; }
+  #mission-phone .row.locked { color: rgba(255,255,255,.35); }
+
+  /* HUD rebuilds #menu-start (and #menu-ending) from plain elements, so the
+     menu is styled by element selectors, not by classes that get wiped. */
+  #menu-start, #menu-ending { flex-direction: column; text-align: center; }
+  #menu-start h1, #menu-ending h1 {
+    font-size: 58px; font-weight: 900; letter-spacing: 6px; margin: 0; line-height: 1;
+    background: linear-gradient(180deg, #ffe9a8 10%, #ffb13d 45%, #ff5a76 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  #menu-start p, #menu-ending p { font-size: 15px; line-height: 1.55; color: var(--text); margin: 12px 0; max-width: 560px; }
+  #menu-start p.controls, #menu-ending p.controls { font-size: 13px; color: var(--muted); }
+  #menu-start p.credits, #menu-ending p.credits { font-size: 12px; color: var(--muted); }
+  #menu-start button, #menu-ending button {
+    display: block; width: min(420px, 84vw); margin: 8px 0; padding: 13px; font-size: 17px; font-weight: 700;
+    font-family: inherit; color: var(--ink); background: linear-gradient(180deg, #ffd23d, #ffb13d);
+    border: none; border-radius: 10px; cursor: pointer; letter-spacing: .5px;
+  }
+  #menu-start button:hover, #menu-ending button:hover { filter: brightness(1.1); }
+  #menu-start button:disabled, #menu-ending button:disabled { opacity: .45; cursor: default; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+
+<!-- In-game HUD -->
+<div id="hud" class="hidden">
+  <div id="wanted" class="hud-box" aria-label="Wanted level"></div>
+  <div id="health" class="hud-box">
+    <div class="label">HEALTH</div>
+    <div class="health-track"><div id="health-bar"></div></div>
+  </div>
+  <div id="stats" class="hud-box">
+    <div id="money">$250</div>
+    <div id="clock">18:40</div>
+    <div id="radio">SOL MAR FM</div>
+  </div>
+  <div id="minimap-wrap"><canvas id="minimap" width="180" height="180"></canvas></div>
+  <div id="objective" class="hud-box"><span class="obj-label">OBJECTIVE</span><span id="objective-text">Talk to Delia Rook</span></div>
+  <div id="speed" class="hud-box">0<span class="unit">km/h</span></div>
+  <div id="crosshair"></div>
+  <div id="dialog" class="hud-box hidden">
+    <div id="dialog-speaker">DELIA ROOK</div>
+    <div id="dialog-text"></div>
+  </div>
+  <div id="toast"></div>
+  <div id="feed"></div>
+</div>
+
+<!-- Start menu -->
+<div id="menu-start" class="overlay">
+  <div class="panel">
+    <h1 class="game-title">CAYO LUMEN</h1>
+    <div class="game-sub">Sun, salt and unpaid debts</div>
+    <p class="story">Mara Voss came home to Cayo Lumen with one suitcase and a debt she did not
+      make. Delia Rook owns that debt now — and Delia always collects. Eight jobs.
+      One ledger. Drive it, steal it, survive it.</p>
+    <button id="btn-new-game" class="menu-btn">NEW GAME</button>
+    <button id="btn-continue" class="menu-btn ghost">CONTINUE</button>
+    <div class="controls">
+      <div><b>W A S D</b> — move / drive</div><div><b>Mouse</b> — look / aim, click to shoot</div>
+      <div><b>Shift</b> — run</div><div><b>E</b> — enter / exit car</div>
+      <div><b>F</b> — punch</div><div><b>Space</b> — brake / handbrake / hop</div>
+      <div><b>R</b> — radio station</div><div><b>M</b> — mute</div>
+      <div><b>G</b> — garage (near Voss Garage)</div><div><b>T</b> — mission phone</div>
+      <div><b>P / Esc</b> — pause</div><div><b>Steal cars</b> — walk up and press E</div>
+    </div>
+    <div class="credits">An original open-world crime story. City, characters, music and art made for this game.</div>
+  </div>
+</div>
+
+<!-- Pause menu -->
+<div id="menu-pause" class="overlay hidden">
+  <div class="panel">
+    <h1 class="game-title" style="font-size:42px">PAUSED</h1>
+    <p class="story">The city waits. Your progress is saved.</p>
+    <button id="btn-resume" class="menu-btn">RESUME</button>
+    <button id="btn-restart" class="menu-btn ghost">RESTART STORY</button>
+    <button id="btn-save-quit" class="menu-btn ghost">SAVE &amp; QUIT TO MENU</button>
+  </div>
+</div>
+
+<!-- Game over -->
+<div id="menu-gameover" class="overlay hidden">
+  <div class="panel">
+    <h1 id="gameover-title">WASTED</h1>
+    <p id="gameover-text">Cayo Lumen is not done with you yet.</p>
+    <button id="btn-respawn" class="menu-btn">GET BACK UP</button>
+    <button id="btn-gameover-menu" class="menu-btn ghost">QUIT TO MENU</button>
+  </div>
+</div>
+
+<!-- Campaign ending (filled in by HUD when all eight jobs are done) -->
+<div id="menu-ending" class="overlay hidden"></div>
+
+<!-- Garage shop -->
+<div id="garage-panel" class="side-panel hidden">
+  <h2>VOSS GARAGE</h2>
+  <div class="sub">Your safehouse. Buy a ride and it waits for you here. Press G to close.</div>
+  <div id="garage-list"></div>
+  <button id="garage-close" class="close">CLOSE (G)</button>
+</div>
+
+<!-- Mission phone -->
+<div id="mission-phone" class="side-panel hidden">
+  <h2>LUMEN PHONE</h2>
+  <div class="sub">Jobs from Delia Rook. Press T to close.</div>
+  <div id="mission-list"></div>
+  <button id="phone-close" class="close">CLOSE (T)</button>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
